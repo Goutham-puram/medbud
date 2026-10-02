@@ -47,6 +47,8 @@ def main() -> None:
     ap.add_argument("--only", nargs="+", choices=COLLECTIONS, default=COLLECTIONS)
     args = ap.parse_args()
 
+    if args.recreate and args.only != COLLECTIONS:
+        print("WARNING: --recreate drops the whole collection; with --only, the other collections will be missing until re-ingested.")
     print(f"Parsing documents from {DATA_DIR} ...")
     records = parse_all(args.only)
 

@@ -252,6 +252,7 @@ def chat_screen() -> None:
             try:
                 r = api_post("/chat", {"question": question}, token=st.session_state.token)
             except httpx.HTTPError as exc:
+                st.session_state.messages.pop()  # keep history consistent: no unanswered turn
                 st.error(f"API error: {exc}")
                 return
         if r.status_code == 401:
@@ -259,6 +260,7 @@ def chat_screen() -> None:
             logout()
             st.rerun()
         if r.status_code != 200:
+            st.session_state.messages.pop()
             st.error(r.json().get("detail", f"request failed ({r.status_code})"))
             return
         data = r.json()

@@ -19,11 +19,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from medibot import router
 from medibot.auth import AuthError, authenticate, issue_token, verify_token
-from medibot.config import GROQ_MODEL, ROLE_COLLECTIONS, SQL_ROLES
+from medibot.config import GROQ_MODEL, NEARBY_TOPICS_FLOOR, ROLE_COLLECTIONS, SQL_ROLES
 from medibot.ingest import index
 from medibot.obs import Timer, log_event, new_request_id
 from medibot.rag import answer as answer_mod
@@ -78,7 +80,7 @@ class SourceOut(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     sources: list[SourceOut]
-    retrieval_type: str              # "hybrid_rag" | "sql_rag" | "direct" (greetings / about the assistant: no retrieval)
+    retrieval_type: Literal["hybrid_rag", "sql_rag", "direct"]  # "direct" = no retrieval (greetings / about the assistant)
     role: str
     # instrumentation (Assignment 3 reads these)
     request_id: str
@@ -199,10 +201,15 @@ def chat(body: ChatRequest, claims: dict = Depends(current_claims)) -> ChatRespo
                     result = answer_mod.generate(body.question, ranked)
             except LLMError as exc:
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
-            text, sources = result.answer, result.sources
+            if result.not_found:  # passages were plausible but did not contain the answer -> same path as a refusal
+                denied = True
+                text = answer_mod.refusal(role, None, ranked).answer
+            else:
+                text, sources = result.answer, result.sources
         else:
             denied = True
-            text = answer_mod.refusal(role, router.guess_collection(body.question)).answer
+            related = ranked if ranked and ranked[0].score > NEARBY_TOPICS_FLOOR else []  # near-miss: offer topics
+            text = answer_mod.refusal(role, router.guess_collection(body.question), related).answer
 
     latency_ms = round((time.perf_counter() - t_start) * 1000)
     log_event(

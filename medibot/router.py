@@ -13,6 +13,7 @@ Layer 2 — when neither route clears its threshold, one small LLM call decides 
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -47,12 +48,20 @@ DOCS_UTTERANCES = [
     "how to raise a pre-authorisation enhancement", "what are the danger signs in paediatric fever", "what is the room rent sub-limit",
     "how do I reset my password", "what is the CURB-65 score", "explain the escalation matrix for claims", "what are the alarm defaults on the BM-500 monitor",
     "first-line therapy for community acquired pneumonia", "how many steps are in the ICU admission procedure", "show me the insurance billing codes",
+    "what is the preventive maintenance schedule for the x-ray unit", "when is calibration due for the infusion pump according to the manual",
+    "maintenance steps for the patient monitor", "who do I escalate to when a claim is rejected", "what is the escalation matrix for claims",
+    "how do I appeal a rejected claim", "what are the common claim rejection codes",
 ]
 CHAT_UTTERANCES = [  # greetings and questions about the assistant itself: answered without retrieval
     "hi", "hello", "hey there", "hey", "good morning", "good evening", "how are you", "how are you doing",
     "what can you help me with", "what can you do", "what do you do", "who are you", "what is medbud", "help",
     "how do I use this", "what questions can I ask", "thanks", "thank you", "thanks a lot", "bye", "goodbye",
     "see you", "can you help me", "what are you able to answer", "tell me about yourself",
+    "what options do I have for my role", "what am I allowed to see", "what can I access with my role",
+    "which documents can I read", "what are my permissions", "what can I ask you", "how does this work",
+    "how do I use this assistant", "what is this tool for", "what kind of questions do you answer",
+    "can I run reports", "do I have access to billing documents", "what collections can I search",
+    "what can a nurse ask", "explain what you can do", "what do you know", "where do your answers come from",
 ]
 TOPIC_UTTERANCES = {
     "clinical": ["treatment protocol for hypertension", "drug formulary dose of metformin", "diagnostic reference ranges for haemoglobin",
@@ -66,6 +75,16 @@ TOPIC_UTTERANCES = {
     "general": ["leave policy and casual leave entitlement", "staff handbook dress code", "code of conduct and whistleblower protection",
                 "how to reset my password", "where is the cafeteria", "notice period for resignation"],
 }
+
+# A database question asks for a number over records. Without one of these cues, a "sql" match from the
+# semantic layer is almost always a document question that merely mentions claims, tickets or equipment.
+SQL_CUES = re.compile(
+    r"\b(how many|how much|count|number of|total|sum|average|avg|mean|median|most|least|highest|lowest|"
+    r"fewest|maximum|minimum|top \d+|rate|percentage|percent|share|trend|per (month|week|year|insurer|department|"
+    r"campus|category|status|equipment)|by (month|insurer|department|campus|category|status)|compare|breakdown|"
+    r"distribution|last month|this year|in 20\d\d)\b",
+    re.I,
+)
 
 FALLBACK_SYSTEM = (
     "Classify the message sent to a hospital staff assistant. Reply with exactly one word:\n"
@@ -111,6 +130,8 @@ def warm_up() -> None:
 
 def classify(question: str) -> RouteDecision:
     choice = _intent_router()(question)
+    if choice.name == "sql" and not SQL_CUES.search(question):
+        choice.name = None  # mentions the data but asks for no number: let the fallback / default decide
     if choice.name in ("sql", "docs", "chat"):
         return RouteDecision(choice.name, choice.similarity_score, "semantic")
     if LLM_FALLBACK:

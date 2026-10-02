@@ -19,7 +19,7 @@ from functools import lru_cache
 from medibot.config import DB_PATH
 from medibot.rag.llm import chat
 
-FORBIDDEN = re.compile(r"\b(insert|update|delete|drop|alter|create|replace|attach|detach|pragma|vacuum|truncate)\b", re.I)
+FORBIDDEN = re.compile(r"\b(insert|update|delete|drop|alter|create|replace\s+into|attach|detach|pragma|vacuum|truncate)\b", re.I)
 MAX_ROWS = 50
 
 
@@ -73,21 +73,19 @@ Rules:
 - Amounts are in INR. Prefer GROUP BY + ORDER BY for "which ... most" questions.
 - Never modify data."""
 
-FEW_SHOTS = [
+FEW_SHOTS = [  # deliberately different from the README and evaluation questions
     (
-        "How many billing claims were escalated last month?",
-        "SELECT COUNT(*) AS escalated_claims FROM claims WHERE status = 'escalated' "
-        "AND strftime('%Y-%m', submitted_date) = (SELECT strftime('%Y-%m', MAX(submitted_date)) FROM claims)",
+        "What is the average number of days a resolved maintenance ticket stayed open?",
+        "SELECT ROUND(AVG(julianday(resolved_date) - julianday(raised_date)), 1) AS avg_days_open "
+        "FROM maintenance_tickets WHERE resolved_date IS NOT NULL",
     ),
     (
-        "Which equipment category has the most open maintenance tickets?",
-        "SELECT category, COUNT(*) AS open_tickets FROM maintenance_tickets WHERE status = 'open' "
-        "GROUP BY category ORDER BY open_tickets DESC LIMIT 1",
+        "How many claims were submitted each month?",
+        "SELECT strftime('%Y-%m', submitted_date) AS month, COUNT(*) AS claims FROM claims GROUP BY month ORDER BY month",
     ),
     (
-        "What is the total approved amount per insurer?",
-        "SELECT insurer, SUM(approved_amount) AS total_approved FROM claims WHERE approved_amount IS NOT NULL "
-        "GROUP BY insurer ORDER BY total_approved DESC",
+        "How many pending claims does each insurer have?",
+        "SELECT insurer, COUNT(*) AS pending_claims FROM claims WHERE status = 'pending' GROUP BY insurer ORDER BY pending_claims DESC",
     ),
 ]
 
@@ -103,14 +101,38 @@ def generate_sql(question: str) -> str:
     return chat(SQL_SYSTEM, user, temperature=0.0, max_tokens=300)
 
 
+def _split_statements(sql: str) -> list[str]:
+    """Split on semicolons that are not inside string literals."""
+    parts, buf, in_str = [], [], False
+    for ch in sql:
+        if ch == "'":
+            in_str = not in_str
+        if ch == ";" and not in_str:
+            parts.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    parts.append("".join(buf))
+    return [p.strip() for p in parts if p.strip()]
+
+
 def clean_sql(raw: str) -> str:
-    """Step 2: keep only the SQL statement, then enforce the safety rules."""
+    """Step 2: keep only the SQL statement, then enforce the safety rules.
+
+    Handles the usual LLM habits: markdown fences, "SQLQuery:" prefixes, a sentence of prose before
+    or after the statement, a trailing semicolon.
+    """
     text = raw.strip()
     fence = re.search(r"```(?:sql)?\s*(.*?)```", text, re.S | re.I)
     if fence:
         text = fence.group(1)
     text = re.sub(r"^\s*(sql\s*query|sqlquery|sql)\s*:\s*", "", text, flags=re.I).strip()
-    statements = [s.strip() for s in text.split(";") if s.strip()]
+    start = re.search(r"\b(select|with)\b", text, re.I)  # skip any prose before the statement
+    if not start:
+        raise SQLSafetyError("only SELECT queries are allowed")
+    text = text[start.start():]
+    text = re.split(r"\n\s*\n", text, maxsplit=1)[0]     # drop prose after a blank line
+    statements = _split_statements(text)
     if len(statements) != 1:
         raise SQLSafetyError("expected exactly one SQL statement")
     sql = statements[0]

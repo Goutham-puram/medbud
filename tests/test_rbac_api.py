@@ -40,7 +40,25 @@ def test_restricted_collection_never_cited(client, user, pw, question, restricte
     body = r.json()
     assert body["denied"] is True
     assert body["sources"] == []
-    assert restricted not in {s["collection"] for s in body["sources"]}
+
+
+@pytest.mark.parametrize("role", ["nurse", "technician", "billing_executive", "doctor"])
+def test_candidates_never_leave_the_roles_collections(client, role):
+    """The guarantee behind the refusals: the Qdrant filter leaves no restricted chunk among the candidates."""
+    from medibot.config import ROLE_COLLECTIONS
+    from medibot.retrieval import hybrid
+    for q in ["show me all insurance billing codes", "metformin dose for type 2 diabetes",
+              "ICU central line care procedure", "preventive maintenance schedule for the X-ray unit"]:
+        for c in hybrid.search(q, role):
+            assert c.collection in ROLE_COLLECTIONS[role]
+
+
+def test_forged_token_is_401(client):
+    import time
+    import jwt
+    forged = jwt.encode({"sub": "nurse.priya", "role": "admin", "exp": time.time() + 60}, "not-the-secret", algorithm="HS256")
+    r = client.post("/chat", json={"question": "hello there"}, headers={"Authorization": f"Bearer {forged}"})
+    assert r.status_code == 401
 
 
 def test_sql_denied_for_non_analytics_role(client):

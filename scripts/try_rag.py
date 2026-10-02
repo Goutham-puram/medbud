@@ -35,7 +35,7 @@ def docs_route(question: str, role: str) -> None:
     print(f"\nreranked top {len(ranked)} (cross-encoder scores; confident={confident}):")
     for r in ranked:
         print(f"  {r.score:7.2f}  {r.candidate.source_document} :: {r.candidate.heading_path[:60]}")
-    result = answer_mod.generate(question, ranked) if confident else answer_mod.refusal(role, None)
+    result = answer_mod.generate(question, ranked) if confident else answer_mod.refusal(role, None, ranked)
     print(f"\nANSWER ({time.time() - t0:.1f}s):\n{result.answer}\n\nSOURCES: {[s.__dict__ for s in result.sources]}")
 
 

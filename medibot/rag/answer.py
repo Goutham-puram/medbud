@@ -18,7 +18,11 @@ Rules:
    "I could not find this in the documents available to you." Never guess clinical details.
 2. Cite every fact with the passage number in square brackets, e.g. [1] or [2][3].
 3. Keep doses, units, codes and numbers exactly as written in the passages.
-4. Be concise: a short paragraph or a few bullet points. No preamble."""
+4. If the passages give different answers for different devices, sections or staff groups, give each one
+   and name which device/section it applies to; never pick one silently.
+5. Be concise: a short paragraph or a few bullet points. No preamble."""
+
+NOT_FOUND_SENTINEL = "I could not find this in the documents available to you"
 
 ROLE_LABEL = {
     "doctor": "doctor",
@@ -40,6 +44,7 @@ class Source:
 class Answer:
     answer: str
     sources: list[Source]
+    not_found: bool = False  # the LLM saw the passages and said the answer is not there
 
 
 def build_context(ranked: list[Ranked]) -> str:
@@ -67,14 +72,30 @@ def sources_of(ranked: list[Ranked]) -> list[Source]:
 def generate(question: str, ranked: list[Ranked]) -> Answer:
     user = f"Context passages:\n\n{build_context(ranked)}\n\nQuestion: {question}"
     text = chat(SYSTEM, user, temperature=0.2, max_tokens=600)
+    if NOT_FOUND_SENTINEL.lower() in text.lower():  # the model read the passages and found no answer: no citations
+        return Answer(answer=text, sources=[], not_found=True)
     return Answer(answer=text, sources=sources_of(ranked))
 
 
-def refusal(role: str, topic_collection: str | None) -> Answer:
-    """Role-aware 'no' with sources=[] (team guidance, Sep 11).
+def nearby_topics(ranked: list[Ranked], limit: int = 3) -> list[str]:
+    """Section titles of the best (already role-filtered) candidates: safe to show, useful as next steps."""
+    seen: list[str] = []
+    for r in ranked:
+        c = r.candidate
+        title = c.section_title if c.section_title != c.heading_path else c.heading_path.split(" > ")[-1]
+        label = f"{title} ({c.source_document})"
+        if label not in seen:
+            seen.append(label)
+        if len(seen) == limit:
+            break
+    return seen
 
-    topic_collection: the collection the question seems to be about (from the router's topic
-    guess), or None when unknown. Never derived from restricted chunks.
+
+def refusal(role: str, topic_collection: str | None, ranked: list[Ranked] | None = None) -> Answer:
+    """Role-aware 'no' with sources=[] (team guidance, Sep 11) — phrased as a next step, not a dead end.
+
+    topic_collection: the collection the question seems to be about (router's topic guess) or None.
+    ranked: the role-filtered candidates, used only for their section titles ("nearby topics").
     """
     allowed = ROLE_COLLECTIONS[role]
     allowed_txt = ", ".join(allowed[:-1]) + f" and {allowed[-1]}" if len(allowed) > 1 else allowed[0]
@@ -87,6 +108,10 @@ def refusal(role: str, topic_collection: str | None) -> Answer:
         )
     else:
         text = f"I could not find this in the documents available to you ({allowed_txt} collections)."
+        topics = nearby_topics(ranked or [])
+        if topics:
+            text += " Nearby topics you can ask about: " + "; ".join(topics) + "."
+    text += " Ask me \"what can I ask?\" to see your options."
     return Answer(answer=text, sources=[])
 
 
@@ -136,7 +161,9 @@ def small_talk(message: str, role: str) -> Answer:
         text = "You're welcome. Ask me anything else from your documents whenever you need."
     elif _BYE.search(message) and len(message.split()) <= 6:
         text = "Goodbye, and take care."
-    elif re.search(r"\b(what can you|what do you do|who are you|help|how do i use|what questions|able to|about yourself|what is medbud)\b", message, re.I):
+    elif re.search(r"\b(what can you|what can i|what do you do|who are you|help|how do i use|how does this|what questions|"
+                   r"able to|about yourself|what is medbud|options?|allowed|permissions?|access|my role|which documents|"
+                   r"collections?|reports?|analytics|what do you know|where do your answers)\b", message, re.I):
         text = capabilities(role)
     else:
         text = chat(SMALL_TALK_SYSTEM, f"The user ({ROLE_LABEL[role]}) says: {message}", temperature=0.5, max_tokens=120)
