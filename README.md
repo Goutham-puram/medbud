@@ -138,8 +138,8 @@ tokens get HTTP `401` (`tests/test_rbac_api.py`).
 
 A normal, cited answer and a SQL answer, for contrast:
 
-![Nurse: cited answer with sources](docs/screenshots/08_answer_with_sources.png)
-![Billing executive: SQL RAG answer with the query shown](docs/screenshots/09_sql_answer.png)
+![Nurse: cited answer, three sources available](docs/screenshots/08_answer_with_sources.png)
+![Billing executive: SQL RAG answer, generated query in the SQL used expander](docs/screenshots/09_sql_answer.png)
 
 The adversarial cases:
 
