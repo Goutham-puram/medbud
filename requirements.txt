@@ -1,0 +1,18 @@
+# Resolved together with `uv pip compile` on 2026-10-01 for Python 3.12 (no conflicts):
+# qdrant-client 1.19.1, fastembed 0.8.1, docling 2.132.0, docling-core 2.99.0, sentence-transformers 6.1.0,
+# semantic-router 0.1.16, PyJWT 2.15.1, fastapi 0.142.2, uvicorn 0.54.0, streamlit 1.64.0, groq 1.7.0
+qdrant-client>=1.19
+fastembed>=0.8
+docling>=2.100
+docling-core[chunking]>=2.90
+sentence-transformers>=5
+semantic-router>=0.1.16
+PyJWT>=2.10
+fastapi>=0.120
+uvicorn[standard]>=0.40
+streamlit>=1.50
+groq>=1.0
+python-dotenv>=1.0
+pydantic>=2.9
+httpx>=0.27
+pytest>=8

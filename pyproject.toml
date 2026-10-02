@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "medbud"
+version = "0.1.0"
+description = "MedBud: role-aware hybrid RAG assistant for MediAssist Health Network (RBAC at the vector store, hybrid search + reranking, SQL RAG)"
+authors = [{ name = "GTP" }]
+requires-python = ">=3.12"
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+include = ["medibot*"]
