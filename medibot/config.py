@@ -34,7 +34,7 @@ JWT_HOURS = int(os.getenv("JWT_HOURS", "8"))
 # retrieval knobs
 CANDIDATES_K = int(os.getenv("CANDIDATES_K", "10"))
 TOP_N = int(os.getenv("TOP_N", "3"))
-RERANK_MIN_SCORE = float(os.getenv("RERANK_MIN_SCORE", "0.0"))
+RERANK_MIN_SCORE = float(os.getenv("RERANK_MIN_SCORE", "-5.0"))  # cross-encoder logit; denials score ~-10, real hits > -3
 
 # RBAC — two axes: documents by department, SQL by function (team clarification, Sep 5)
 COLLECTIONS = ["general", "clinical", "nursing", "billing", "equipment"]
