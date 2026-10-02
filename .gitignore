@@ -7,3 +7,4 @@ qdrant_storage/
 .DS_Store
 *.log
 *.egg-info/
+logs/

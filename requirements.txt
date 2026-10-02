@@ -11,6 +11,7 @@ PyJWT>=2.10
 fastapi>=0.120
 uvicorn[standard]>=0.40
 streamlit>=1.50
+streamlit-cookies-controller>=0.0.4
 groq>=1.0
 python-dotenv>=1.0
 pydantic>=2.9

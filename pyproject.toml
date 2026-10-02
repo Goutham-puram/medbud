@@ -15,3 +15,7 @@ dependencies = { file = ["requirements.txt"] }
 
 [tool.setuptools.packages.find]
 include = ["medibot*"]
+
+[tool.pytest.ini_options]
+addopts = "-q -p no:warnings"
+testpaths = ["tests"]

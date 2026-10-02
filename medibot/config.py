@@ -1,6 +1,7 @@
 """Central settings. Every tunable comes from the environment (.env); nothing is hard-coded elsewhere."""
 
 import os
+import secrets
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -27,8 +28,12 @@ MAX_TOKENS = int(os.getenv("CHUNK_MAX_TOKENS", "200"))  # embedded text must sta
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
-# auth
-JWT_SECRET = os.getenv("JWT_SECRET", "change-me")
+# auth — HS256 wants a secret of at least 32 bytes
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+if len(JWT_SECRET) < 32:  # a random per-process secret keeps dev safe (tokens stop working on restart)
+    print('WARNING: JWT_SECRET missing or shorter than 32 characters; using a random secret for this process. '
+          'Set one in .env, e.g.  python -c "import secrets; print(secrets.token_hex(32))"')
+    JWT_SECRET = secrets.token_hex(32)
 JWT_HOURS = int(os.getenv("JWT_HOURS", "8"))
 
 # retrieval knobs
